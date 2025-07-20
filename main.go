@@ -108,16 +108,36 @@ func handleLine(s *Store, line string) string {
 	switch cmd {
 	case "PING":
 		return "PONG"
+
 	case "SET":
 		if len(args) < 2 {
 			return "(error) ERR wrong number of arguments for 'SET' command"
 		}
 		key := args[0]
-		// join the rest, detect PX
-		// ... parse ttl if present ...
-		value := strings.Join(args[1:], " ")
-		s.Set(key, value, 0)
+
+		var (
+			ttl        time.Duration
+			valueParts []string
+		)
+		i := 1
+		for i < len(args) {
+			if strings.ToUpper(args[i]) == "PX" && i+1 < len(args) {
+				ms, err := strconv.Atoi(args[i+1])
+				if err != nil || ms < 0 {
+					return "(error) ERR PX value is not an integer or is negative"
+				}
+				ttl = time.Duration(ms) * time.Millisecond
+				i += 2
+			} else {
+				valueParts = append(valueParts, args[i])
+				i++
+			}
+		}
+		value := strings.Join(valueParts, " ")
+
+		s.Set(key, value, ttl)
 		return "OK"
+
 	case "GET":
 		if len(args) != 1 {
 			return "(error) ERR wrong number of arguments for 'GET' command"
@@ -126,6 +146,7 @@ func handleLine(s *Store, line string) string {
 			return v
 		}
 		return "(nil)"
+
 	default:
 		return "(error) ERR unknown command"
 	}
